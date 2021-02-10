@@ -1,68 +1,73 @@
 import requests 
 import re
+import logging 
+import time
+import sys 
+import json 
 
+
+
+pages_to_search = ["Gamestop short squeeze"]
 """
 MediaWiki API Demo of 'Parse' module:
-Parse content of a page 
+https://www.mediawiki.org/wiki/API:Parsing_wikitext#GET_request
 """
-
-s = requests.Session()
-
 URL = "https://en.wikipedia.org/w/api.php"
 
-params = {
+for page in pages_to_search:
+    epoch = str(time.time()).split('.')[0]
+    word_list = []
+    word_dict = {}
+    sorted_word_dict = {}
+
+    S = requests.Session()
+
+    params = {
     "action": "parse",
-    "page": "GameStop short squeeze",
+    "page": page,
     "format": "json"
-}
+    }
 
-r = s.get(url=URL,params=params)
-data = r.json()
-# print(data["parse"]["text"]["*"])
+    wiki_request = S.get(url=URL,params=params)
+    data = wiki_request.json()
 
-# encode and strip
-convert_to_string = str(data["parse"]["text"]["*"].encode('utf-8').strip())
+    # validate page == page 
+    if data['parse']["title"] != page:
+        print("incorrect page title")
+        sys.exit(-1)
 
-# remove everything within an html tag
-convert_to_string = re.sub('<[^<]+?>', '', convert_to_string)
-convert_to_string = re.sub('&#[^<]+?;[^<]+?;', '', convert_to_string)
+    # encode and strip
+    convert_to_string = str(data["parse"]["text"]["*"].encode('utf-8').strip())
 
-# split on punctuations 
-convert_to_string = re.sub('[?., %-()"^;:/]', ' ', convert_to_string)
+    # remove everything within an html tag
+    convert_to_string = re.sub('<[^<]+?>', '', convert_to_string)
+    convert_to_string = re.sub('&#[^<]+?;[^<]+?;', '', convert_to_string)
 
-# remove multiple spaces
-convert_to_string = re.sub('\\n', ' ', convert_to_string)
-convert_to_string = re.sub(' +', ' ', convert_to_string)
+    # split on punctuations 
+    convert_to_string = re.sub('[?., %-()"^;:/]', ' ', convert_to_string)
 
-# convert to lower 
-convert_to_string = convert_to_string.lower()
+    # remove multiple spaces
+    convert_to_string = re.sub('\\n', ' ', convert_to_string)
+    convert_to_string = re.sub(' +', ' ', convert_to_string)
+    convert_to_string = convert_to_string.lower()
 
-end = convert_to_string.rfind("See also")
-convert_to_string = convert_to_string[:end]
+    end = convert_to_string.rfind("See also")
+    convert_to_string = convert_to_string[:end]
+    convert_to_string = convert_to_string.replace(r"\\u", "")
+    convert_to_string = convert_to_string.replace("the", '')
 
-convert_to_string = convert_to_string.replace("the", '')
+    word_list = convert_to_string.split(' ')
 
+    for word in word_list:
+        if word.isalpha():
+            word_dict[word] = word_dict.get(word, 0) + 1
 
-word_list = []
-word_list = convert_to_string.split(' ')
-
-word_dict = {}
-for word in word_list:
-    word_dict[word] = word_dict.get(word, 0) + 1
-
-sorted_word_dict = sorted(word_dict.items(), key=lambda x: x[1], reverse=True)
-
-short_count = word_dict["short"]
-most_popular_word = sorted_word_dict[0][0]
+    word_dict = json.dumps(word_dict)
+print(word_dict)
 
 
-epoch = str(time.time()).split('.')[0]
+    # insert_query = """
+    #                 INSERT INTO wiki_word_count (datetime_checked, page_name, word_count_json)
+    #                 (SELECT '{datetime_checked}', '{page}', PARSE_JSON('word_count'));
+    #                 """.format(datetime_checked = epoch, page=page.lower, word_count=word_dict)
 
-Query = """
-        INSERT INTO gme_wiki_count(datetime_checked, short_count, most_popular_word) VALUES('{datetime_checked}',{short_count},'{most_popular_word}');
-        """.format(datetime_checked=epoch,short_count=short_count,most_popular_word=most_popular_word)
-
-
-
-
-print(short_count)
